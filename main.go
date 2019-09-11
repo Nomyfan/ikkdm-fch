@@ -21,8 +21,8 @@ func saveImg(link string, title string, name string, ch chan bool) {
 		ext := filepath.Base(link)
 		p := path.Join("download", title, name+"_"+ext)
 		if bin, err := ioutil.ReadAll(res.Body); err == nil {
-			fmt.Println("保存 {{ " + link + " }} 到 {{ " + p + " }}")
 			_ = ioutil.WriteFile(p, bin, 0777)
+			fmt.Println("成功保存 {{ " + link + " }} 到 {{ " + p + " }}")
 		}
 	}
 	ch <- true
@@ -79,6 +79,7 @@ func fchEachEpisode(urlPath string, channel chan bool) {
 			<-ch
 		}
 		close(ch)
+		fmt.Println("{{ " + title + " }}下载完成")
 		channel <- true
 	})
 	_ = cly.Visit(link)
@@ -95,9 +96,7 @@ func handle(baseLink string, maxConnection int64) {
 			hrefs = append(hrefs, href)
 		})
 
-		if maxConnection < 0 {
-			maxConnection = int64(len(hrefs))
-		} else if maxConnection > int64(len(hrefs)) {
+		if maxConnection < 0 || maxConnection > int64(len(hrefs)) {
 			maxConnection = int64(len(hrefs))
 		}
 		fmt.Println("--------- 一共" + strconv.FormatInt(int64(len(hrefs)), 10) + "话 ---------")
@@ -110,6 +109,7 @@ func handle(baseLink string, maxConnection int64) {
 		fmt.Println("--------- 开始下载 ---------")
 		channel := make(chan bool, maxConnection)
 		connection := int64(0)
+		count := 0
 		for i := 0; i < len(hrefs); {
 			if connection < maxConnection {
 				connection++
@@ -118,11 +118,15 @@ func handle(baseLink string, maxConnection int64) {
 			} else {
 				<-channel
 				connection--
+				count++
+				fmt.Println("已保存" + strconv.Itoa(count) + "话")
 			}
 		}
 		for connection > 0 {
 			<-channel
 			connection--
+			count++
+			fmt.Println("已保存" + strconv.Itoa(count) + "话")
 		}
 		close(channel)
 		fmt.Println("--------- 结束 ---------")
@@ -140,11 +144,11 @@ func main() {
 	baseLink, _ := reader.ReadString('\n')
 	baseLink = baseLink[0 : len(baseLink)-1]
 
-	fmt.Print("数据最大请求数（默认30，-1不限制）： ")
+	fmt.Print("数据最大请求数（默认10，-1不限制）： ")
 	max, _ := reader.ReadString('\n')
 	maxConnection, err := strconv.ParseInt(max[:len(max)-1], 10, 64)
 	if err != nil {
-		maxConnection = 30
+		maxConnection = 10
 		fmt.Println("最大连接数：" + strconv.FormatInt(maxConnection, 10))
 	}
 	handle(baseLink, maxConnection)
