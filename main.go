@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -13,21 +12,27 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/PuerkitoBio/goquery"
+
 	_ "github.com/PuerkitoBio/goquery"
 	"github.com/axgle/mahonia"
 	"github.com/gocolly/colly"
 )
 
+var (
+	baseLocation = "download"
+)
+
 // Episode 每一话的标题和链接
 type Episode struct {
 	title string
-	href  string
+	url   string
 }
 
 func saveImg(link string, title string, name string, ch chan bool) {
 	if res, err := http.Get(link); err == nil {
 		ext := filepath.Base(link)
-		p := path.Join("download", title, name+"_"+ext)
+		p := path.Join(baseLocation, title, name+"_"+ext)
 		if bin, err := ioutil.ReadAll(res.Body); err == nil {
 			_ = ioutil.WriteFile(p, bin, 0777)
 			fmt.Println("成功保存 {{ " + link + " }} 到 {{ " + p + " }}")
@@ -56,7 +61,7 @@ func fchImg(title string, url string, ch chan bool) {
 
 func fchEachEpisode(episode Episode, channel chan bool) {
 	host := "http://m.ikkdm.com"
-	link := host + episode.href
+	url := host + episode.url
 	cly := colly.NewCollector()
 	cly.OnHTML("div.classBox.autoHeight", func(element *colly.HTMLElement) {
 
@@ -70,14 +75,14 @@ func fchEachEpisode(episode Episode, channel chan bool) {
 		split := strings.Split(info, "/")
 		episodeCount, _ := strconv.ParseInt(strings.TrimSpace(split[1]), 10, 64)
 
-		if _, err := os.Stat("download/" + episode.title); os.IsNotExist(err) {
-			if err := os.Mkdir("download/"+episode.title, 0777); err != nil {
+		if _, err := os.Stat(filepath.Join(baseLocation, episode.title)); os.IsNotExist(err) {
+			if err := os.Mkdir(filepath.Join(baseLocation, episode.title), 0777); err != nil {
 				fmt.Println("无法为 {{ " + episode.title + " }} 创建目录")
 				return
 			}
 		}
 
-		baseURL := link[0 : strings.LastIndex(link, "/")+1]
+		baseURL := url[0 : strings.LastIndex(url, "/")+1]
 		ch := make(chan bool, episodeCount)
 		for i := int64(1); i <= episodeCount; i++ {
 			url := baseURL + strconv.FormatInt(i, 10) + ".htm"
@@ -91,32 +96,36 @@ func fchEachEpisode(episode Episode, channel chan bool) {
 		fmt.Println("{{ " + episode.title + " }}下载完成")
 		channel <- true
 	})
-	_ = cly.Visit(link)
+	_ = cly.Visit(url)
 }
 
-func handle(baseLink string, maxConnection int64) {
+func handle(baseURL string, maxConnection int64) {
 	var episodes []Episode
 	cly := colly.NewCollector()
 	cly.ID = 1
-	cly.OnHTML("#list", func(element *colly.HTMLElement) {
+	cly.OnHTML("body", func(element *colly.HTMLElement) {
 		// 获取所有话的链接
 		decoder := mahonia.NewDecoder("gbk")
-		element.ForEach("li > a[href]", func(i int, element *colly.HTMLElement) {
+
+		baseLocation = filepath.Join(baseLocation, decoder.ConvertString(element.DOM.Find("#comicName").Text()))
+
+		element.ForEach("#list > li > a[href]", func(i int, element *colly.HTMLElement) {
 			href := element.Attr("href")
 			title := decoder.ConvertString(element.Text)
-			episodes = append(episodes, Episode{title: title, href: href})
+			episodes = append(episodes, Episode{title: title, url: href})
 		})
 
 		if maxConnection < 0 || maxConnection > int64(len(episodes)) {
 			maxConnection = int64(len(episodes))
 		}
 		fmt.Println("--------- 一共" + strconv.FormatInt(int64(len(episodes)), 10) + "话 ---------")
-		if _, err := os.Stat("download"); os.IsNotExist(err) {
-			if err := os.Mkdir("download", 0777); err != nil {
+		if _, err := os.Stat(baseLocation); os.IsNotExist(err) {
+			if err := os.MkdirAll(baseLocation, 0777); err != nil {
 				fmt.Println("创建下载目录失败")
 				return
 			}
 		}
+
 		fmt.Println("--------- 开始下载 ---------")
 		channel := make(chan bool, maxConnection)
 		connection := int64(0)
@@ -143,9 +152,9 @@ func handle(baseLink string, maxConnection int64) {
 		fmt.Println("--------- 结束 ---------")
 	})
 	cly.OnResponse(func(response *colly.Response) {
-		fmt.Println("收到" + baseLink + "的响应")
+		fmt.Println("收到" + baseURL + "的响应")
 	})
-	_ = cly.Visit(baseLink)
+	_ = cly.Visit(baseURL)
 }
 
 func main() {
