@@ -35,7 +35,6 @@ func saveImg(link string, title string, name string, ch chan bool) {
 		p := path.Join(baseLocation, title, name+"_"+ext)
 		if bin, err := ioutil.ReadAll(res.Body); err == nil {
 			_ = ioutil.WriteFile(p, bin, 0777)
-			fmt.Println("成功保存 {{ " + link + " }} 到 {{ " + p + " }}")
 		}
 	}
 	ch <- true

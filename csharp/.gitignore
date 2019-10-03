@@ -1,0 +1,7 @@
+﻿.vs
+.vscode
+bin
+obj
+download
+*.jpg
+*.png
