@@ -93,7 +93,8 @@ namespace ikkdm_fch
         {
             var url = "http://m.ikkdm.com" + episode.Link;
 
-            var doc = await context.OpenAsync(res => res.Content(httpClient.GetStreamAsync(url).Result));
+            var content = await httpClient.GetStreamAsync(url);
+            var doc = await context.OpenAsync(res => res.Content(content));
             var box = doc.QuerySelector("div.classBox.autoHeight");
 
             var info = box.QuerySelectorAll("div.bottom ul.subNav li").Skip(1).Take(1).First().TextContent;
@@ -117,7 +118,8 @@ namespace ikkdm_fch
 
         private static async Task FchImage(string title, string url)
         {
-            var doc = await context.OpenAsync(res => res.Content(httpClient.GetStreamAsync(url).Result));
+            var content = await httpClient.GetStreamAsync(url);
+            var doc = await context.OpenAsync(res => res.Content(content));
             var box = doc.QuerySelector("div.classBox.autoHeight");
 
             var script = box.QuerySelector("script[language=javascript]").TextContent;
