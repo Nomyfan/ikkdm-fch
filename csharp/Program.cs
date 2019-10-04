@@ -15,9 +15,10 @@ namespace ikkdm_fch
         private static string baseLocation = "./download";
         private static readonly HttpClient httpClient = new HttpClient();
 
-        private static readonly IBrowsingContext context = BrowsingContext.New(Configuration.Default.WithCulture("zh-CN").WithLocaleBasedEncoding());
+        private static readonly IBrowsingContext context = BrowsingContext.New(Configuration.Default);
 
         private static int count;
+        private static int failCount;
         private static int connection;
 
         static void Main(string[] args)
@@ -57,7 +58,7 @@ namespace ikkdm_fch
             {
                 Directory.CreateDirectory(baseLocation);
             }
-            
+
             Console.WriteLine("-------- 一共" + episodes.Count + "话 --------");
             Console.WriteLine("-------- 开始下载 --------");
             for (int i = 0; i < episodes.Count;)
@@ -65,17 +66,7 @@ namespace ikkdm_fch
                 if (connection < maxConnection)
                 {
                     Interlocked.Increment(ref connection);
-                    Task.Factory.StartNew((idx) =>
-                    {
-                        Task.Run(async () =>
-                        await FchEpisode(episodes[(int)idx]).ContinueWith(_ =>
-                        {
-                            Interlocked.Increment(ref count);
-                            Console.WriteLine("已保存" + count + "话");
-                            Interlocked.Decrement(ref connection);
-                        }));
-                    }, i);
-                    ++i;
+                    _ = FchEpisode(episodes[i++]);
                 }
                 else
                 {
@@ -110,10 +101,14 @@ namespace ikkdm_fch
             var baseUrl = url.Substring(0, url.LastIndexOf('/') + 1);
             Console.WriteLine(episode.Title + " " + episodeCount + "图");
             await Enumerable.Range(0, episodeCount)
-                            .Select(i => FchImage(episode.Title, baseUrl + (i + 1).ToString() + ".htm"))
-                            .ToArray()
-                            .WhenAll();
+                   .Select(i => FchImage(episode.Title, baseUrl + (i + 1).ToString() + ".htm"))
+                   .ToArray()
+                   .WhenAll();
+
+            Interlocked.Increment(ref count);
+            Interlocked.Decrement(ref connection);
             Console.WriteLine("{{ " + episode.Title + " }}下载完成");
+            Console.WriteLine("已保存" + count.ToString() + "话, 有" + failCount + "张图下载遇到错误");
         }
 
         private static async Task FchImage(string title, string url)
@@ -128,7 +123,15 @@ namespace ikkdm_fch
             var i1 = url.LastIndexOf('/');
             var i2 = url.LastIndexOf('.');
             var imgName = url.Substring(i1 + 1, i2 - i1 - 1);
-            await SaveImage(matchedUrl, title, imgName);
+            try
+            {
+                await SaveImage(matchedUrl, title, imgName);
+            }
+            catch (Exception e)
+            {
+                Interlocked.Increment(ref failCount);
+                Console.Error.WriteLine("从" + matchedUrl + "下载遇到错误" + Environment.NewLine + e.StackTrace);
+            }
         }
 
         private static async Task SaveImage(string url, string title, string imgName)
