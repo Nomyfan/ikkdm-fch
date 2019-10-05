@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -113,7 +114,8 @@ namespace ikkdm_fch
 
         private static async Task FchImage(string title, string url)
         {
-            var content = await httpClient.GetStreamAsync(url);
+            var byteArray = await httpClient.GetByteArrayAsync(url);
+            var content = Encoding.GetEncoding("GB18030").GetString(byteArray).Replace("charset=gbk", "charset=utf8");
             var doc = await context.OpenAsync(res => res.Content(content));
             var box = doc.QuerySelector("div.classBox.autoHeight");
 
