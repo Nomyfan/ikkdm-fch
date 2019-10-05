@@ -3,7 +3,6 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,7 +15,7 @@ namespace ikkdm_fch
         private static string baseLocation = "./download";
         private static readonly HttpClient httpClient = new HttpClient();
 
-        private static readonly IBrowsingContext context = BrowsingContext.New(Configuration.Default);
+        private static readonly IBrowsingContext context = BrowsingContext.New(Configuration.Default.WithOnly(new Utf8MetaHandler()));
 
         private static int count;
         private static int failCount;
@@ -32,7 +31,7 @@ namespace ikkdm_fch
                 maxConnection = 10;
             }
 
-            var document = context.OpenAsync(res => res.Content(httpClient.GetStreamAsync(homeUrl).Result)).Result;
+            var document = context.OpenAsync(res => res.Content(httpClient.GetByteArrayAsync(homeUrl).Result.GbkByteArrayToUtf8String())).Result;
 
             var title = document.QuerySelector("#comicName").TextContent;
 
@@ -85,8 +84,8 @@ namespace ikkdm_fch
         {
             var url = "http://m.ikkdm.com" + episode.Link;
 
-            var content = await httpClient.GetStreamAsync(url);
-            var doc = await context.OpenAsync(res => res.Content(content));
+            var content = await httpClient.GetByteArrayAsync(url);
+            var doc = await context.OpenAsync(res => res.Content(content.GbkByteArrayToUtf8String()));
             var box = doc.QuerySelector("div.classBox.autoHeight");
 
             var info = box.QuerySelectorAll("div.bottom ul.subNav li").Skip(1).Take(1).First().TextContent;
@@ -114,9 +113,8 @@ namespace ikkdm_fch
 
         private static async Task FchImage(string title, string url)
         {
-            var byteArray = await httpClient.GetByteArrayAsync(url);
-            var content = Encoding.GetEncoding("GB18030").GetString(byteArray).Replace("charset=gbk", "charset=utf8");
-            var doc = await context.OpenAsync(res => res.Content(content));
+            var content = await httpClient.GetByteArrayAsync(url);
+            var doc = await context.OpenAsync(res => res.Content(content.GbkByteArrayToUtf8String()));
             var box = doc.QuerySelector("div.classBox.autoHeight");
 
             var script = box.QuerySelector("script[language=javascript]").TextContent;
