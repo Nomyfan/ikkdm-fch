@@ -100,7 +100,7 @@ func fchEachEpisode(episode Episode, channel chan bool) {
 }
 
 func contains(collection map[string]bool, title string) bool {
-	for k, _ := range collection {
+	for k := range collection {
 		if strings.HasPrefix(title, k) {
 			return true
 		}

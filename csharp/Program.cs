@@ -1,5 +1,6 @@
 ﻿using AngleSharp;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -21,6 +22,9 @@ namespace ikkdm_fch
         private static int failCount;
         private static int connection;
 
+        private static readonly HashSet<string> includes = new HashSet<string>();
+        private static readonly HashSet<string> excludes = new HashSet<string>();
+
         static void Main(string[] args)
         {
             Console.Write("ikkdm的移动版链接 >>> ");
@@ -31,6 +35,14 @@ namespace ikkdm_fch
                 maxConnection = 10;
             }
 
+            // Includes
+            Console.Write("包括（设置包含项，空为全部）: ");
+            Console.ReadLine().Split(",").Where(i => i!=string.Empty).ToList().ForEach(i => includes.Add(i));
+
+            // Excludes
+            Console.Write("不包括（设置剔除项）：");
+            Console.ReadLine().Split(",").Where(e => e != string.Empty).ToList().ForEach(e => excludes.Add(e));
+
             var document = context.OpenAsync(res => res.Content(httpClient.GetByteArrayAsync(homeUrl).Result.GbkByteArrayToUtf8String())).Result;
 
             var title = document.QuerySelector("#comicName").TextContent;
@@ -38,6 +50,7 @@ namespace ikkdm_fch
             var episodes = document
                 .QuerySelector("#list")
                 .QuerySelectorAll("li > a[href]")
+                .Where(e => (includes.Count == 0 || Contains(includes, e.TextContent.Split(' ')[1]) && !Contains(excludes, e.TextContent.Split(' ')[1])))
                 .Select(e => new Episode { Link = e.GetAttribute("href"), Title = e.TextContent })
                 .ToList();
 
@@ -143,6 +156,18 @@ namespace ikkdm_fch
             {
                 await fs.WriteAsync(stream, 0, stream.Length);
             }
+        }
+
+        private static bool Contains(HashSet<string> collection, string order)
+        {
+            foreach (var it in collection)
+            {
+                if(order.StartsWith(it))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }
