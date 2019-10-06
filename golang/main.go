@@ -21,6 +21,9 @@ import (
 
 var (
 	baseLocation = "download"
+	decoder      = mahonia.NewDecoder("gbk")
+	includes     = map[string]bool{}
+	excludes     = map[string]bool{}
 )
 
 // Episode 每一话的标题和链接
@@ -41,7 +44,6 @@ func saveImg(link string, title string, name string, ch chan bool) {
 }
 
 func fchImg(title string, url string, ch chan bool) {
-	decoder := mahonia.NewDecoder("gbk")
 	cly := colly.NewCollector()
 	cly.OnHTML("div.classBox.autoHeight", func(element *colly.HTMLElement) {
 		// img src is inserted by script after page loaded
@@ -59,8 +61,7 @@ func fchImg(title string, url string, ch chan bool) {
 }
 
 func fchEachEpisode(episode Episode, channel chan bool) {
-	host := "http://m.ikkdm.com"
-	url := host + episode.url
+	url := "http://m.ikkdm.com" + episode.url
 	cly := colly.NewCollector()
 	cly.OnHTML("div.classBox.autoHeight", func(element *colly.HTMLElement) {
 
@@ -98,20 +99,32 @@ func fchEachEpisode(episode Episode, channel chan bool) {
 	_ = cly.Visit(url)
 }
 
+func contains(collection map[string]bool, title string) bool {
+	for k, _ := range collection {
+		if strings.HasPrefix(title, k) {
+			return true
+		}
+	}
+	return false
+}
+
 func handle(baseURL string, maxConnection int64) {
 	var episodes []Episode
 	cly := colly.NewCollector()
 	cly.ID = 1
 	cly.OnHTML("body", func(element *colly.HTMLElement) {
 		// 获取所有话的链接
-		decoder := mahonia.NewDecoder("gbk")
-
 		baseLocation = filepath.Join(baseLocation, decoder.ConvertString(element.DOM.Find("#comicName").Text()))
 
 		element.ForEach("#list > li > a[href]", func(i int, element *colly.HTMLElement) {
 			href := element.Attr("href")
 			title := decoder.ConvertString(element.Text)
-			episodes = append(episodes, Episode{title: title, url: href})
+
+			// 判断是否需要下载
+			order := strings.Split(title, " ")[1]
+			if (len(includes) == 0 || contains(includes, order)) && !contains(excludes, order) {
+				episodes = append(episodes, Episode{title: title, url: href})
+			}
 		})
 
 		if maxConnection < 0 || maxConnection > int64(len(episodes)) {
@@ -169,6 +182,23 @@ func main() {
 	if err != nil {
 		maxConnection = 10
 		fmt.Println("最大连接数：" + strconv.FormatInt(maxConnection, 10))
+	}
+
+	// Includes
+	fmt.Print("包括（设置包含项，空为全部）: ")
+	if include, err := reader.ReadString('\n'); err == nil && include != "\n" {
+		includeList := strings.Split(include[:len(include)-1], ",")
+		for _, v := range includeList {
+			includes[v] = true
+		}
+	}
+	// Excludes
+	fmt.Print("不包括（设置剔除项）：")
+	if exclude, err := reader.ReadString('\n'); err == nil && exclude != "\n" {
+		excludeList := strings.Split(exclude[:len(exclude)-1], ",")
+		for _, v := range excludeList {
+			excludes[v] = true
+		}
 	}
 	handle(baseLink, maxConnection)
 }
